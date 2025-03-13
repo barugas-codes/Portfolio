@@ -1,0 +1,82 @@
+local driveseat = script.Parent.VehicleSeat
+
+local motors = {
+	script.Parent.FRMotor,
+	script.Parent.FLMotor,
+	script.Parent.RLMotor,
+	script.Parent.RRMotor,
+}
+
+local servos = {
+	script.Parent.LServo,
+	script.Parent.RServo
+}
+
+local MAX_SPEED = 90 
+local BASE_STEER = 30 
+local BOOSTED_STEER = 50 
+local TURN_TIME_THRESHOLD = 0.2 
+
+local steerStartTime = nil
+local checkingSteer = false
+
+local function drive()
+	for _, motor in pairs(motors) do
+		motor.AngularVelocity = MAX_SPEED * driveseat.Throttle
+	end
+end
+
+local function resetSteering()
+	for _, servo in pairs(servos) do
+		servo.TargetAngle = 0
+	end
+end
+
+local function checkSteerDuration()
+	checkingSteer = true
+	while checkingSteer do
+		if steerStartTime and driveseat.Steer ~= 0 then
+			local timeTurning = tick() - steerStartTime
+			local useBoostedSteer = timeTurning >= TURN_TIME_THRESHOLD
+
+
+			local dynamicSteer = useBoostedSteer and BOOSTED_STEER or BASE_STEER
+			for _, servo in pairs(servos) do
+				servo.TargetAngle = dynamicSteer * driveseat.Steer
+				
+				if servo.TargetAngle == 50 or servo.TargetAngle == -50 then
+					script.Parent.RR["Front Right Wheel_Tire Sidewall_02"].Smoke.Enabled = true
+					script.Parent.RL["Front Left Wheel_Tire Treads_0"].Smoke.Enabled = true
+				else
+					script.Parent.RR["Front Right Wheel_Tire Sidewall_02"].Smoke.Enabled = false
+					script.Parent.RL["Front Left Wheel_Tire Treads_0"].Smoke.Enabled = false
+				end
+			end
+		else
+			checkingSteer = false
+			resetSteering()  
+		end
+		task.wait(0.1)
+	end
+end
+
+local function steer()
+	local currentSteer = driveseat.Steer
+
+	if currentSteer ~= 0 then
+		if not steerStartTime then
+			steerStartTime = tick()
+
+			if not checkingSteer then
+				task.spawn(checkSteerDuration)
+			end
+		end
+	else
+		steerStartTime = nil
+		checkingSteer = false
+		resetSteering() 
+	end
+end
+
+driveseat:GetPropertyChangedSignal("Throttle"):Connect(drive)
+driveseat:GetPropertyChangedSignal("Steer"):Connect(steer)
